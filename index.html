@@ -1,0 +1,1054 @@
+<html>
+	<head>
+		<script type="text/javascript">
+			var solution = {
+				rows: [],
+				cols: [],
+				squares: []
+			};
+			var input = {
+				rows: [],
+				cols: [],
+				squares: []
+			};
+			var autoResponse = false;
+			var DEBUG_SUDOKU = false;
+			
+			function updateInput(arr, val, iRow, iCol) {
+				//console.log("Adding value:", iRow, iCol, val);
+				
+				// Rows
+				if (!arr.rows[iRow]) {
+					arr.rows[iRow] = [];
+				}
+				arr.rows[iRow][iCol] = val;
+				
+				// Cols
+				if (!arr.cols[iCol]) {
+					arr.cols[iCol] = [];
+				}
+				arr.cols[iCol][iRow] = val;
+				
+				// Squares
+				let [x, y] = convertSquareCoords(iRow, iCol);
+				if (!arr.squares[x]) {
+					arr.squares[x] = [];
+				}
+				arr.squares[x][y] = val;
+			}
+			
+			function convertSquareCoords(x, y) {
+				// This methods works for converting from Square to Coords and from Coords to Square.
+				return [
+					(Math.floor(x / 3) * 3) + (Math.floor(y / 3)),
+					(3 * (x % 3)) + (y % 3)
+				];
+			}
+			
+			function checkInput() {
+				for (let iRow = 0; iRow < solution.rows.length; iRow++) {
+					for (let iCol = 0; iCol < solution.rows[iRow].length; iCol++) {
+						if (solution.rows[iRow][iCol] != input.rows[iRow][iCol]) {
+							console.error("Invalid solution: (", iRow, ",", iCol, ") - ", solution.rows[iRow][iCol], "!=", input.rows[iRow][iCol]);
+							return false;
+						}
+					}
+				}
+				
+				return true;
+			}
+			
+			function checkSolution(val, iRow, iCol) {
+				//console.log("Checking solution:", iRow, iCol, val);
+				// Rows
+				if (solution.rows[iRow].includes(val)) {
+					return false;
+				}
+				
+				// Cols
+				if (solution.cols[iCol].includes(val)) {
+					return false;
+				}
+				
+				// Squares
+				let x = (Math.floor(iRow / 3) * 3) + (Math.floor(iCol / 3));
+				if (solution.squares[x].includes(val)) {
+					return false;
+				}
+				
+				return true;
+			}
+			
+			function resetInput() {
+				// Set solution rows, cols, and squares to a 9x9 array of nulls.
+				input.rows = Array.from(Array(9), x => 
+					Array.from(Array(9), y => null));
+				input.cols = Array.from(Array(9), x => 
+					Array.from(Array(9), y => null));
+				input.squares = Array.from(Array(9), x => 
+					Array.from(Array(9), y => null));
+			}
+			
+			function resetSolution() {
+				// Set solution rows, cols, and squares to a 9x9 array of nulls.
+				solution.rows = Array.from(Array(9), x => 
+					Array.from(Array(9), y => null));
+				solution.cols = Array.from(Array(9), x => 
+					Array.from(Array(9), y => null));
+				solution.squares = Array.from(Array(9), x => 
+					Array.from(Array(9), y => null));
+			}
+			
+			function generateSolution(iRow = 0, iCol = 0, isForcedGen = false) {
+				// Attempt to load.
+				if (iRow == 0 && iCol == 0 && !isForcedGen && loadSolution()) {
+					return true;
+				}
+			
+				// Get array of 1 - 9.
+				let arrRandNums = [...Array(9).keys()].map(x => x+1);
+				
+				// Randomly sort.
+				arrRandNums.sort((a,b) => Math.random() - .5);
+				
+				//console.log("=== Generating solution:", iRow, iCol);
+				
+				// Go through the numbers and find a suitable number for this spot.
+				for (let iRandNum = 0; iRandNum < arrRandNums.length; iRandNum++) {
+					let iNum = arrRandNums[iRandNum];
+					
+					//console.log(iRow, iCol, iNum);
+					// Check that iNum works for the current iRow,iCol location.
+					// If it doesn't, then skip it.
+					if (!checkSolution(iNum, iRow, iCol)) {
+						//console.log("Invalid-skipping:", iRow, iCol, iNum);
+						
+						if (iNum == 9) {
+						}
+						
+						continue;
+					}
+					
+					//console.log("Processing (", iRow, ",", iCol, "):", iNum);
+					
+					// Insert iNum into the solution at iRow,iCol.
+					updateInput(solution, iNum, iRow, iCol);
+					
+					// We've successfully added in the last number.
+					if (iRow == 8 && iCol == 8) {
+						//console.log("Breaking-end:", iRow, iCol);
+						break;
+					}
+					
+					// Call the method for the next spot. If iNum works for the next spot, then break.
+					if (generateSolution(iRow + Math.floor((iCol + 1) / 9), (iCol + 1) % 9, true)) {
+						//console.log("Next is valid:", iRow, iCol);
+						break;
+					}
+					
+					//console.log("Next is invalid:", iRow, iCol);
+					updateInput(solution, null, iRow, iCol);
+				}
+				
+				/*
+				if (iRow == 2 && iCol == 8) {
+					console.log("Invalid??:", solution.rows[iRow][iCol]);
+				}
+				
+				if (iRow == 0 && iCol == 0) {
+					console.log("Done!");
+				}
+				*/
+				
+				if (!solution.rows[iRow][iCol]) {
+					//console.log("Unable to find number:", iRow, iCol);
+					return false;
+				}
+					
+				//console.log("   Valid (", iRow, ",", iCol, "):", solution.rows[iRow][iCol]);
+				
+				// Attempt to save.
+				if (iRow == 0 && iCol == 0) {
+					saveSolution();
+				}
+				
+				return true;
+			}
+			
+			function clearStorage() {
+				localStorage.removeItem("sudoku");
+			}
+			
+			function saveSolution() {
+				if (!solution || solution.rows[0].some(x => x === null)) {
+					console.error("Unable to save solution do to invalid state!");
+					return false;
+				}
+				
+				let key = solution.rows[0].join("") + solution.cols[0].join("");
+				let s = localStorage.sudoku ? JSON.parse(localStorage.sudoku) : { solutions: {} };
+				
+				// Already been saved.
+				if (!!s.solutions[key]) {
+					return false;
+				}
+				
+				s.solutions[key] = solution;
+				localStorage.sudoku = JSON.stringify(s);
+				
+				console.log("Saved:", key);
+				
+				return true;
+			}
+			
+			function loadSolution(force = false) {
+				// Nothing to load.
+				if (!localStorage.sudoku) {
+					return false;
+				}
+				
+				let s = JSON.parse(localStorage.sudoku);
+				
+				// Nothing to load.
+				if (!s.solutions || !Object.keys(s.solutions).length) {
+					return false;
+				}
+				
+				// Load a random solution.
+				let keys = Object.keys(s.solutions);
+				
+				// If we have less than 10 available to choose from and not 
+				// forcing a load, then don't load one.
+				if (keys.length < 10 && !force) {
+					return false;
+				}
+				
+				keys.sort((a, b) => Math.random() - .5);
+				let key = keys[0];
+				solution = s.solutions[key];
+				
+				console.log("Loaded:", key);
+				
+				return true;
+			}
+			
+			function updateNumber(iRow, iCol, val, isReplace = true) {
+				if (solution.rows[iRow][iCol] != val) {
+					return false;
+				}
+				
+				let idInput = "input" + iRow.toString() + "_" + iCol.toString();
+				
+				// Already being displayed.
+				if (!document.getElementById(idInput)) {
+					return false;
+				}
+				
+				// Convert the input to plain text.
+				if (isReplace) {
+					let pNode = document.getElementById(idInput).parentNode;
+					pNode.removeChild(document.getElementById(idInput));
+					pNode.innerHTML = val;
+				}
+				else {
+					document.getElementById(idInput).value = val;
+					document.getElementById(idInput).dispatchEvent(new Event('change'));
+				}
+				updateInput(input, val, iRow, iCol);
+				
+				return true;
+			}
+			
+			function getInputOffsetCoords(iRow, iCol) {
+				// The first item return is the initial coordinates and the number found.
+				let nums = input.rows[iRow][iCol] ? 
+					[input.rows[iRow][iCol]] : 
+					[1, 2, 3, 4, 5, 6, 7, 8, 9];
+					
+				let offsetRow = Math.floor(iRow / 3) * 3;
+				let offsetCol = Math.floor(iCol / 3) * 3;
+				
+				for (let iNum = 0; iNum < nums.length; iNum++) {
+					let num = nums[iNum];
+					row1 = (offsetRow == iRow) ? offsetRow + 1 : offsetRow;
+					row2 = ((row1 + 1) == iRow) ? row1 + 2 : row1 + 1;
+					col1 = (offsetCol == iCol) ? offsetCol + 1 : offsetCol;
+					col2 = ((col1 + 1) == iCol) ? col1 + 2 : col1 + 1;
+					
+					row1_col = input.rows[row1].indexOf(num);
+					row2_col = input.rows[row2].indexOf(num);
+					col1_row = input.cols[col1].indexOf(num);
+					col2_row = input.cols[col2].indexOf(num);
+					
+					if (DEBUG_SUDOKU) {
+						console.log("***", num, "-", iRow, "-", iCol, "***");
+						console.log("Row1: (", row1, ",", row1_col, ")");
+						console.log("Row2: (", row2, ",", row2_col, ")");
+						console.log("Col1: (", col1_row, ",", col1, ")");
+						console.log("Col2: (", col2_row, ",", col2, ")");
+					}
+					
+					let invalidRows = [iRow, row1, row2];
+					let invalidCols = [iCol, col1, col2];
+					let invalidAdjVals = [null, num];
+					
+					if (DEBUG_SUDOKU) {
+						console.log("Invalid Rows:", invalidRows);
+						console.log("Invalid Cols:", invalidCols);
+					}
+					
+					if (
+						invalidRows.includes(col1_row) ||
+						invalidRows.includes(col2_row) ||
+						invalidCols.includes(row1_col) ||
+						invalidCols.includes(row2_col)
+					) {
+						if (DEBUG_SUDOKU) {
+							console.log("Invalid num: Skipping", num);
+						}
+						continue;
+					}
+					
+					// If a row is invalid, but the iCol for that that row is filled, then it's valid.
+					let invalidRow1 = col1_row == -1 && !input.rows[row1][iCol];
+					let invalidRow2 = col2_row == -1 && !input.rows[row2][iCol];
+					let validRows = !invalidRow1 && !invalidRow2;
+					
+					// If a col is invalid, but the iRow for that that column is filled, then it's valid.
+					let invalidCol1 = row1_col == -1 && !input.cols[col1][iRow];
+					let invalidCol2 = row2_col == -1 && !input.cols[col2][iRow];
+					let validCols = !invalidCol1 && !invalidCol2;
+					
+					if (DEBUG_SUDOKU) {
+						console.log("invalidRow1:", invalidRow1 ? "Yes" : "No", ";", !input.rows[row1][iCol]);
+						console.log("invalidRow2:", invalidRow2 ? "Yes" : "No", ";", !input.rows[row2][iCol]);
+						console.log("invalidCol1:", invalidCol1 ? "Yes" : "No", ";", !input.cols[col1][iRow]);
+						console.log("invalidCol2:", invalidCol2 ? "Yes" : "No", ";", !input.cols[col2][iRow]);
+					}
+					
+					// Not enough data.
+					if (
+						(!validCols && (invalidRow1 || invalidRow2)) || 
+						(!validRows && (invalidCol1 || invalidCol2))
+					) {
+						continue;
+					}
+					
+					if (DEBUG_SUDOKU && validCols && (invalidRow1 || invalidRow2)) {
+						console.log("Invalid rows offset by filled cells.");
+					}
+					
+					if (DEBUG_SUDOKU && validRows && (invalidCol1 || invalidCol2)) {
+						console.log("Invalid cols offset by filled cells.");
+					}
+					
+					return [
+						[iRow, iCol, num],
+						[row1, row1_col],
+						[row2, row2_col],
+						[col1_row, col1],
+						[col2_row, col2]
+					];
+				}
+				
+				return null;
+			}
+			
+			function showNumbers(mode = "Hard") {
+				// Display random values from solution.
+				// Easy = Show all for 8 numbers except 1 spot plus 10.
+				// Medium = Show all for 4 numbers except 1 spot plus 10.
+				// Hard = Show all for 2 number except 1 spot plus 10.
+				let totalNumbers = {
+					"Easy": 8,
+					"Medium": 4,
+					"Hard": 2
+				}[mode] || 2;
+						
+				let arrNums = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+				for (let iShownNum = totalNumbers; iShownNum > 0; iShownNum--) {
+					let iArrNum = Math.floor(Math.random() * arrNums.length);
+					let nShownNum = arrNums[iArrNum];
+					// Remove the selected num from arrNums.
+					arrNums[iArrNum] = arrNums[arrNums.length - 1];
+					arrNums.pop();
+					
+					// Determine which cell will remain blank.
+					let iBlankRow = Math.floor(Math.random() * 9);
+					let iBlankCol = solution.rows[iBlankRow].indexOf(nShownNum);
+					
+					// === Rows
+					// Add the number to rows above/below the blank row.
+					// If 6, then add 7 and 8. If 7, then add 6 and 8. If 8, then add 6, 7.
+					let offsetRow = Math.floor(iBlankRow / 3) * 3;
+					
+					for (let iSolutionRow = offsetRow; iSolutionRow < (offsetRow + 3); iSolutionRow++) {
+						if (iSolutionRow == iBlankRow) {
+							continue;
+						}
+					
+						for (let iSolutionCol = 0; iSolutionCol < solution.rows[iSolutionRow].length; iSolutionCol++) {
+							updateNumber(iSolutionRow, iSolutionCol, nShownNum);
+						}
+					}
+					
+					// === Columns
+					// Add the number to columns left/right of the blank column.
+					// If 6, then add 7 and 8. If 7, then add 6 and 8. If 8, then add 6, 7.
+					let offsetCol = Math.floor(iBlankCol / 3) * 3;
+					
+					for (let iSolutionCol = offsetCol; iSolutionCol < (offsetCol + 3); iSolutionCol++) {
+						if (iSolutionCol == iBlankCol) {
+							continue;
+						}
+						
+						for (let iSolutionRow = 0; iSolutionRow < solution.rows.length; iSolutionRow++) {
+							updateNumber(iSolutionRow, iSolutionCol, nShownNum);
+						}
+					}
+				}
+				
+			}
+			
+			function showRandomNumbers(mode = "Hard") {
+				let totalNumbers = {
+					"Easy": 40,
+					"Medium": 30,
+					"Hard": 20
+				}[mode] || 20;
+			
+				if (!totalNumbers) {
+					return;
+				}
+					
+				for (let n = 0; n < totalNumbers; n++) {
+					// Select a random row/col
+					let nRow = 0;
+					let nCol = 0;
+					let idInput = "";
+					do {
+						nRow = Math.floor(Math.random() * solution.rows.length);
+						nCol = Math.floor(Math.random() * solution.rows[nRow].length);
+						idInput = "input" + nRow.toString() + "_" + nCol.toString();
+					}
+					while(input.rows[nRow][nCol] != null || document.getElementById(idInput) == null);
+					
+					updateNumber(nRow, nCol, solution.rows[nRow][nCol]);
+				}
+			}
+			
+			function move(iRow, iCol, isForced = false) {
+				let inputId = "input" + iRow + "_" + iCol;
+				if (!document.getElementById(inputId)) {
+					return false;
+				}
+				
+				if (
+					!isForced &&
+					document.getElementById(inputId).value &&
+					autoResponse &&
+					!document.getElementById(inputId).parentNode.classList.contains("invalid")
+				) {
+					return false;
+				}
+				
+				document.getElementById(inputId).focus();
+				return true;
+			}
+			
+			function fnArrowUp(elem, evt) {
+				if (elem.dataset.iRow <= 0 && !evt.ctrlKey) {
+					return false;
+				}
+				
+				let iRowNew = elem.dataset.iRow;
+				
+				// If CTRL key was used, then cycle to the next available input going up and left.
+				if (evt.ctrlKey) {
+					let iColNew = elem.dataset.iCol;
+					while (iRowNew-- >= 0 && iColNew >= 0) {
+						if (iRowNew < 0) {
+							iRowNew = 8;
+							iColNew--;
+						}
+						
+						if (move(iRowNew, iColNew, false)) {
+							break;
+						}
+					}
+					return;
+				}
+				
+				while (iRowNew-- > 0) {
+					if (move(iRowNew, elem.dataset.iCol, evt.shiftKey)) {
+						break;
+					}
+				}
+			}
+			
+			function fnArrowDown(elem, evt) {
+				if (elem.dataset.iRow >= 8 && !evt.ctrlKey) {
+					return false;
+				}
+				
+				let iRowNew = elem.dataset.iRow;
+				
+				// If CTRL key was used, then cycle to the next available input going down and right.
+				if (evt.ctrlKey) {
+					let iColNew = elem.dataset.iCol;
+					while (iRowNew++ <= 8 && iColNew <= 8) {
+						if (iRowNew > 8) {
+							iRowNew = 0;
+							iColNew++;
+						}
+						
+						if (move(iRowNew, iColNew, false)) {
+							break;
+						}
+					}
+					return;
+				}
+				
+				while (iRowNew++ < 8) {
+					if (move(iRowNew, elem.dataset.iCol, evt.shiftKey)) {
+						break;
+					}
+				}
+			}
+			
+			function fnArrowLeft(elem, evt) {
+				if (elem.dataset.iCol <= 0 && !evt.ctrlKey) {
+					return false;
+				}
+				
+				let iColNew = elem.dataset.iCol;
+				
+				// If CTRL key was used, then cycle to the next available input going left and up.
+				if (evt.ctrlKey) {
+					let iRowNew = elem.dataset.iRow;
+					while (iRowNew >= 0 && iColNew-- >= 0) {
+						if (iColNew < 0) {
+							iColNew = 8;
+							iRowNew--;
+						}
+						
+						if (move(iRowNew, iColNew, false)) {
+							break;
+						}
+					}
+					return;
+				}
+				
+				while (iColNew-- > 0) {
+					if (move(elem.dataset.iRow, iColNew, evt.shiftKey)) {
+						break;
+					}
+				}
+			}
+			
+			function fnArrowRight(elem, evt) {
+				if (elem.dataset.iCol >= 8 && !evt.ctrlKey) {
+					return false;
+				}
+				
+				let iColNew = elem.dataset.iCol;
+				
+				// If CTRL key was used, then cycle to the next available input going right and down.
+				if (evt.ctrlKey) {
+					let iRowNew = elem.dataset.iRow;
+					while (iRowNew <= 8 && iColNew++ <= 8) {
+						if (iColNew > 8) {
+							iColNew = 0;
+							iRowNew++;
+						}
+						
+						if (move(iRowNew, iColNew, false)) {
+							break;
+						}
+					}
+					return;
+				}
+				
+				while (iColNew++ < 8) {
+					if (move(elem.dataset.iRow, iColNew, evt.shiftKey)) {
+						break;
+					}
+				}
+			}
+			
+			function resetBoardWithLoader(isForcedGen = false) {
+				showModal("Generating board...");
+				setTimeout(() => {
+					resetBoard(isForcedGen);
+					hideModal();
+				}, 500);
+			}
+			
+			function resetBoard(isForcedGen = false) {
+				resetSolution();
+				generateSolution(0, 0, isForcedGen);
+				resetInput();
+				document.getElementById("board").innerHTML = "";
+				let table = document.createElement("table");
+				table.style.marginTop = "10px";
+				table.style.borderCollapse = "separate";
+				table.style.borderSpacing = "0px";
+				table.style.border = "2px solid #000";
+				
+				// Create the 9x9 grid display.
+				for (iRow = 0; iRow < solution.rows.length; iRow++) {
+					let row = document.createElement("tr");
+					
+					for (iCol = 0; iCol < solution.rows[iRow].length; iCol++) {
+						let colInput = document.createElement("input");
+						colInput.id = "input" + iRow.toString() + "_" + iCol.toString();
+						colInput.type = "text";
+						colInput.setAttribute("maxlength", "1");
+						colInput.style.height = "30px";
+						colInput.style.width = "30px";
+						colInput.style.textAlign = "center";
+						colInput.style.fontSize = "14px";
+						colInput.style.fontWeight = "bold";
+						colInput.style.border = "none";
+						colInput.dataset.iRow = iRow;
+						colInput.dataset.iCol = iCol;
+						colInput.classList.add("inputNumber");
+						
+						// KeyDown event for moving between cells.
+						colInput.onkeydown = function(evt) {
+							if (typeof window["fn" + evt.key] === "function") {
+								window["fn" + evt.key](this, evt);
+							}
+						};
+						
+						// OnChange event for updating the input array.
+						colInput.onchange = function(evt) { 
+							this.parentNode.classList.remove("invalid");
+							this.parentNode.classList.remove("valid");
+							
+							let val = (
+								this.value == null || 
+								this.value == "" || 
+								isNaN(this.value)
+							) ? null : parseInt(this.value);
+							
+							updateInput(input, val, this.dataset.iRow, this.dataset.iCol);
+							
+							if (
+								autoResponse && 
+								input.rows[this.dataset.iRow] && 
+								solution.rows[this.dataset.iRow] && 
+								input.rows[this.dataset.iRow][this.dataset.iCol]
+							) {
+								this.parentNode.classList.add(
+									input.rows[this.dataset.iRow][this.dataset.iCol] != solution.rows[this.dataset.iRow][this.dataset.iCol] ? 
+										"invalid" : "valid"
+								);
+							}
+						};
+						
+						let col = document.createElement("td");
+						col.style.height = "35px";
+						col.style.width = "35px";
+						col.style.fontFamily = "Arial";
+						col.style.textAlign = "center";
+						col.style.fontSize = "14px";
+						if (iCol > 0 && (iCol % 3) == 0) {
+							col.classList.add("b-left");
+						}
+						
+						if (((iCol + 1) % 3) == 0) {
+							col.classList.add("b-right");
+						}
+					
+						if (iRow > 0 && (iRow % 3) == 0) {
+							col.classList.add("b-top");
+						}
+					
+						if (((iRow + 1) % 3) == 0) {
+							col.classList.add("b-bottom");
+						}
+						
+						col.appendChild(colInput);
+						row.appendChild(col);
+					}
+					table.appendChild(row);
+				}
+				
+				document.getElementById("board").appendChild(table);
+				
+				// Show some initial numbers.
+				showNumbers(document.getElementById("modes").value);
+				showRandomNumbers(document.getElementById("modes").value);
+			}
+			
+			function toggleHints() {
+				autoResponse = document.getElementById("chkAutoResponse").checked;
+				
+				// Go through each of the inputs and toggle the invalid class.
+				document.querySelectorAll("input.inputNumber").forEach((elem) => {
+					elem.parentNode.classList.remove("invalid");
+					elem.parentNode.classList.remove("valid");
+					
+					if (!autoResponse) {
+						return;
+					}
+				
+					let iRow = elem.dataset.iRow;
+					let iCol = elem.dataset.iCol;
+					
+					if (!input.rows[iRow] || !solution.rows[iRow] || !input.rows[iRow][iCol]) {
+						return;
+					}
+					
+					elem.parentNode.classList.add(
+						input.rows[iRow][iCol] != solution.rows[iRow][iCol] ? "invalid" : "valid"
+					);	
+				});
+			}
+			
+			function load() {
+				document.getElementById("chkAutoResponse").checked = autoResponse;
+			}
+			
+			function clearBoard() {
+				document.querySelectorAll("input.inputNumber").forEach((elem) => {
+					elem.value = null;
+					elem.dispatchEvent(new Event('change'));
+				});
+			}
+			
+			function showModal(msg) {
+				document.getElementById("modalMessage").innerHTML = msg;
+				
+				document.getElementById("modal").classList.add("active");
+				setTimeout(2000);
+			}
+			
+			function hideModal() {
+				document.getElementById("modal").classList.remove("active");
+			}
+			
+			// TODO: This might be able to be removed.
+			function getNextSolvableInput() {
+				// Check if any squares can be solved.
+				let solveSquares = input.squares
+					.map((x, iSquare) => {
+						let nulls = x
+							// Turn iSquare, iCell into iRow, iCol coordinates.
+							.map((n, iCell) => n == null ? convertSquareCoords(iSquare, iCell) : null)
+							.filter(n => n != null);
+							
+						return nulls.length == 1 ? nulls[0] : null;
+					})
+					.filter(x => x != null);
+					
+				if (solveSquares.length > 0) {
+					return solveSquares[0];
+				}
+				
+				// Check if any cells can be solved. This uses a combination of the two rows and cols next to the cell.
+				
+				// Pick the next unanswered cell.
+				let solveCells = input.rows
+					.map((x, iRow) => {
+						let nulls = x
+							.map((n, iCol) => n == null ? iCol : null)
+							.filter(n => n != null)
+							.map((iCol, dummy) => (getInputOffsetCoords(iRow, iCol) || [])[0] || null)	
+							.filter(n => n != null);
+						return nulls.length > 0 ? nulls[0] : null;
+					})
+					.filter(x => x != null);
+					
+				if (solveCells.length > 0) {
+					console.log("solveCells:", solveCells);
+					return solveCells[0];
+				}
+				
+				return null;
+			}
+			
+			function guessValue(iRow, iCol) {
+				let [sqRow, sqCol] = convertSquareCoords(iRow, iCol);
+				let nums = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+				return (getInputOffsetCoords(iRow, iCol) || [])[0] || null;
+			}
+			
+			function solve() {
+				// Look for the next input to solve.
+				let prevInput = null;
+				let isChanged = false;
+				let iTest = 20;
+				
+				do {
+					isChanged = false;
+					
+					if (DEBUG_SUDOKU) {
+						console.log("============= Pass", (21 - iTest), "===================");
+					}
+					
+					if (iTest-- < 0) {
+						// TODO: Remove this debugging line.
+						console.error("Solve - Too many loops");
+						return false;
+					}
+					
+					// Traverse the list of null coords.
+					let nulls = [].concat(...input.rows
+						.map((x, iRow) => x
+							.map((n, iCol) => 
+								n == null ? [iRow, iCol] : null
+							)
+							.filter(n => n != null)
+						)
+						.filter(x => x != null && x.length > 0)
+					);
+					
+					if (DEBUG_SUDOKU) {
+						console.log("nulls:", nulls);
+					}
+					
+					while (nulls != null && nulls.length > 0) {
+						let nextInput = nulls.pop();
+						let [iRow, iCol] = nextInput;
+						let nums = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+						let isSet = false;
+						let [sqRow, sqCol] = convertSquareCoords(iRow, iCol);
+						
+						
+						// Try to solve the square.
+						if (input.squares[sqRow].filter(x => x == null).length == 1) {
+							isSet = updateNumber(iRow, iCol, nums.filter(x => !input.squares[sqRow].includes(x))[0], false);
+							if (DEBUG_SUDOKU) {
+								console.log("Solved square:", (isSet ? "Yes" : "No"), "--", iRow, iCol, input.rows[iRow][iCol]);
+							}
+						}
+						
+						// Try to solve the row.
+						if (!isSet && input.rows[iRow].filter(x => x == null).length == 1) {
+							isSet = updateNumber(iRow, iCol, nums.filter(x => !input.rows[iRow].includes(x))[0], false);
+							if (DEBUG_SUDOKU) {
+								console.log("Solved row:", (isSet ? "Yes" : "No"), "--", iRow, iCol, input.rows[iRow][iCol]);
+							}
+						}
+						
+						// Try to solve the column.
+						if (!isSet && input.cols[iCol].filter(x => x == null).length == 1) {
+							isSet = updateNumber(iRow, iCol, nums.filter(x => !input.cols[iCol].includes(x))[0], false);
+							if (DEBUG_SUDOKU) {
+								console.log("Solved col:", (isSet ? "Yes" : "No"), "--", iRow, iCol, input.rows[iRow][iCol]);
+							}
+						}
+						
+						// Try to solve the cell using like numbers.
+						let guess = guessValue(iRow, iCol);
+						//console.log("guess:", guess);
+						if (!isSet && guess && guess[2]) {
+							isSet = updateNumber(iRow, iCol, guess[2], false);
+							if (DEBUG_SUDOKU) {
+								console.log("Solved number:", (isSet ? "Yes" : "No"), "--", iRow, iCol, input.rows[iRow][iCol]);
+							}
+						}
+						
+						// TODO: Implement brute force.
+						if (!isSet) {
+						}
+						
+						isChanged = isChanged || isSet;
+						
+						if (DEBUG_SUDOKU) {
+							console.log("------------------");
+						}
+					}
+				}
+				while(isChanged)
+				
+				if (DEBUG_SUDOKU) {
+					console.log("Finished in", 19 - iTest, "passes");
+				}
+			}
+			
+		</script>
+		<style>
+			td {
+				border: 1px solid #666;
+			}
+			
+			td.invalid {
+				border-color: #f00 !important;
+			}
+			
+			td.valid {
+				border-color: #0c0 !important;
+			}
+			
+			td.b-left {
+				border-left: 2px solid #000;
+			}
+			
+			td.b-right {
+				border-right: 2px solid #000;
+			}
+			
+			td.b-top {
+				border-top: 2px solid #000;
+			}
+			
+			td.b-bottom {
+				border-bottom: 2px solid #000;
+			}
+			
+			/* The switch - the box around the slider */
+			.switch {
+				position: relative;
+				display: inline-block;
+				width: 36px;
+				height: 22px;
+			}
+
+			/* Hide default HTML checkbox */
+			.switch input {
+				opacity: 0;
+				width: 0;
+				height: 0;
+			}
+
+			/* The slider */
+			.slider {
+				position: absolute;
+				cursor: pointer;
+				top: 0;
+				left: 0;
+				right: 0;
+				bottom: 0;
+				background-color: #ccc;
+				-webkit-transition: .4s;
+				transition: .4s;
+			}
+
+			.slider:before {
+				position: absolute;
+				content: "";
+				height: 15px;
+				width: 15px;
+				left: 4px;
+				bottom: 4px;
+				background-color: white;
+				-webkit-transition: .4s;
+				transition: .4s;
+			}
+
+			input:checked + .slider {
+				background-color: #2196F3;
+			}
+
+			input:focus + .slider {
+				box-shadow: 0 0 1px #2196F3;
+			}
+
+			input:checked + .slider:before {
+				-webkit-transform: translateX(13px);
+				-ms-transform: translateX(13px);
+				transform: translateX(13px);
+			}
+
+			/* Rounded sliders */
+			.slider.round {
+				border-radius: 34px;
+			}
+
+			.slider.round:before {
+				border-radius: 50%;
+			}
+			
+			label.switch + label {
+				margin-left: 10px;
+				margin-top: 2px;
+			}
+			
+			div.modal {
+				display: none;
+				position: absolute;
+				top: 0;
+				left: 0;
+				margin: 0;
+				padding: 0;
+				z-index: 1000;
+			}
+			
+			div.modal.active {
+				display: block;
+			}
+			
+			div.modal > div.modalMessage {
+				width: 30vw;
+				height: 30vh;
+				position: absolute;
+				top: 35vh;
+				left: 35vw;
+				background-color: #fff;
+				z-index: 1001;
+				padding: 30px;
+				margin: 0;
+				text-align: center;
+				font-size: 18px;
+				font-weight: bold;
+			}
+			
+			@media only screen and (max-width: 600px) {
+				div.modal > div.modalMessage {
+					width: calc(80vw - 60px);
+					height: calc(80vh - 60px);
+					top: 10vh;
+					left: 10vw;
+				}
+			}
+			
+			div.modal > div.cloud {
+				opacity: .7;
+				position: absolute;
+				top: 0;
+				left: 0;
+				width: 100vw;
+				height: 100vh;
+				margin: 0;
+				padding: 0;
+				z-index: 1000;
+				background-color: #000;
+			}
+		</style>
+	</head>
+	<body onload="load()">
+		<div style="display:flex; margin-bottom:10px;" title="Show if answer is valid">
+			<label class="switch">
+				<input id="chkAutoResponse" type="checkbox" onchange="toggleHints()" />
+				<span class="slider round" />
+			</label>
+			<label>Auto-hint</label>
+		</div>
+		<select id="modes">
+			<option value="Easy">Easy</option>
+			<option value="Medium">Medium</option>
+			<option value="Hard" selected>Hard</option>
+		</select>
+		<button onclick="resetBoardWithLoader()" title="Reset to another pre-loaded puzzle or generate a new one">Reset</button>
+		<button onclick="clearBoard()" title="Clear inputs">Clear</button>
+		<button onclick="resetBoardWithLoader(true)" title="Generate a new puzzle">Generate</button>
+		<button onclick="solve()" title="Auto-solve the puzzle">Solve</button>
+		<div id="board"></div>
+		<div id="modal" class="modal no-reponse">
+			<div id="modalMessage" class="modalMessage"></div>
+			<div class="cloud"></div>
+		</div>
+		<br><br>
+		<div style="position:relative; background-color:#efefef; display:inline-block; padding: 20px; border:1px solid #ccc;">
+			<div style="position:absolute; top:-10px; left:10px; background-color:#fff; display:inline-block; border:1px solid #ccc; padding:2px;"><b>Keys</b></div>
+			Arrows: <i>Move to the next cell (skips correct cells)</i><br>
+			SHFT+Arrows: <i>Move to the next cell including correct cells</i><br>
+			CTRL+Arrows: <i>Cycles to the next cell (skips correct cells)</i>
+		</div>
+		
+		
+	</body>
+</html>
